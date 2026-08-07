@@ -1,0 +1,25 @@
+services:
+  aebndl-web:
+    build:
+      context: .
+    image: aebndl-web:local
+    container_name: aebndl-web
+    restart: unless-stopped
+    labels:
+      - "docktail.service.enable=true"
+      - "docktail.service.name=aebn"
+      - "docktail.service.port=8787"
+      - "docktail.service.service-port=443"
+    ports:
+      - "${AEBNDL_WEB_PORT:-8787}:8787"
+    environment:
+      AEBNDL_HOST: 0.0.0.0
+      AEBNDL_PORT: 8787
+      AEBNDL_OUTPUT_DIR: /downloads
+      AEBNDL_WORK_DIR: /work
+      TZ: "${TZ:-UTC}"
+    volumes:
+      # Point this at your remote-mounted download location, for example /mnt/nas/aebn-downloads.
+      - "${AEBNDL_REMOTE_DOWNLOAD_DIR:-./downloads}:/downloads"
+      # Keep temporary segments separate; this can also be a remote mount if desired.
+      - "${AEBNDL_REMOTE_WORK_DIR:-./work}:/work"

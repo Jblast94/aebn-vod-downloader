@@ -4,6 +4,10 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["aebn_dl"]
+artifacts = [
+    "aebn_dl/templates/*.html",
+    "aebn_dl/static/*",
+]
 
 [project]
 name = "aebndl"
@@ -13,9 +17,13 @@ readme = "README.md"
 requires-python = ">=3.8"
 dependencies = [
     "curl-cffi>=0.7.0",
+    "fastapi>=0.124.4",
+    "jinja2>=3.1.6",
     "lxml>=4.9.0",
+    "python-multipart>=0.0.20",
     "rich>=12.0.0",
     "typing-extensions >= 4.0.0 ; python_version < '3.11'",
+    "uvicorn[standard]>=0.33.0",
 ]
 
 [project.optional-dependencies]
@@ -23,6 +31,7 @@ dev = ["lxml-stubs", "ruff"]
 
 [project.scripts]
 aebndl = "aebn_dl.cli:main"
+aebndl-web = "aebn_dl.web:main"
 
 
 [tool.ruff]

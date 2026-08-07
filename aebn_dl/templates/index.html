@@ -1,0 +1,165 @@
+{% extends "base.html" %}
+
+{% block title %}AEBN Downloader Web UI{% endblock %}
+
+{% block content %}
+<section class="hero">
+  <div>
+    <p class="eyebrow">Local web UI</p>
+    <h1>AEBN VOD Downloader</h1>
+    <p class="hero-copy">Start downloads, inspect movie metadata, and monitor logs from a focused browser interface.</p>
+  </div>
+  <div class="hero-card">
+    <span class="hero-card__label">Server</span>
+    <strong>127.0.0.1:8787</strong>
+    <span>Designed for local use</span>
+  </div>
+</section>
+
+<section class="grid">
+  <form id="download-form" class="panel form-panel" action="/downloads" method="post">
+    <div class="panel-heading">
+      <div>
+        <p class="eyebrow">Download setup</p>
+        <h2>New job</h2>
+      </div>
+      <button class="button button-primary" type="submit">Start download</button>
+    </div>
+
+    <label class="field field-wide">
+      <span>Movie URL or list.txt</span>
+      <input name="url" type="text" placeholder="https://straight.aebn.com/straight/movies/..." required>
+    </label>
+
+    <div class="field-row">
+      <label class="field">
+        <span>Output directory</span>
+        <input name="output_dir" type="text" value="{{ default_output_dir }}" placeholder="Defaults to current directory">
+      </label>
+      <label class="field">
+        <span>Work directory</span>
+        <input name="work_dir" type="text" value="{{ default_work_dir }}" placeholder="Defaults to current directory">
+      </label>
+    </div>
+
+    <div class="field-row field-row-three">
+      <label class="field">
+        <span>Resolution</span>
+        <input name="resolution" type="number" min="0" placeholder="Highest">
+      </label>
+      <label class="field">
+        <span>Scene</span>
+        <input name="scene" type="number" min="1" placeholder="All scenes">
+      </label>
+      <label class="field">
+        <span>Threads</span>
+        <input name="threads" type="number" min="1" value="5">
+      </label>
+    </div>
+
+    <div class="field-row field-row-three">
+      <label class="field">
+        <span>Start segment</span>
+        <input name="start_segment" type="number" min="0" placeholder="0">
+      </label>
+      <label class="field">
+        <span>End segment</span>
+        <input name="end_segment" type="number" min="0" placeholder="Last">
+      </label>
+      <label class="field">
+        <span>Target stream</span>
+        <select name="target_stream">
+          <option value="">Audio + video</option>
+          <option value="audio">Audio only</option>
+          <option value="video">Video only</option>
+        </select>
+      </label>
+    </div>
+
+    <div class="field-row">
+      <label class="field">
+        <span>Proxy</span>
+        <input name="proxy" type="text" placeholder="protocol://user:pass@host:port">
+      </label>
+      <label class="field">
+        <span>Log level</span>
+        <select name="log_level">
+          <option>INFO</option>
+          <option>DEBUG</option>
+          <option>WARNING</option>
+          <option>ERROR</option>
+          <option>CRITICAL</option>
+        </select>
+      </label>
+    </div>
+
+    <div class="toggles">
+      <label><input type="checkbox" name="force_resolution"> Force resolution</label>
+      <label><input type="checkbox" name="include_performer_names"> Include performer names</label>
+      <label><input type="checkbox" name="no_metadata"> Skip metadata</label>
+      <label><input type="checkbox" name="download_covers"> Download covers</label>
+      <label><input type="checkbox" name="overwrite_existing_files"> Overwrite segments</label>
+      <label><input type="checkbox" name="keep_segments_after_download"> Keep segments</label>
+      <label><input type="checkbox" name="keep_logs"> Keep logs</label>
+      <label><input type="checkbox" name="aggressive_segment_cleaning"> Aggressive cleaning</label>
+      <label><input type="checkbox" name="proxy_metadata_only"> Proxy metadata only</label>
+      <label><input type="checkbox" name="split_scenes"> Split scenes</label>
+    </div>
+
+    <div class="form-actions">
+      <button class="button" id="info-button" type="button">Fetch info</button>
+      <span id="form-message" class="message" aria-live="polite"></span>
+    </div>
+  </form>
+
+  <aside class="panel info-panel">
+    <div class="panel-heading">
+      <div>
+        <p class="eyebrow">Preview</p>
+        <h2>Movie info</h2>
+      </div>
+    </div>
+    <pre id="movie-info" class="terminal">Enter a URL and click Fetch info.</pre>
+  </aside>
+</section>
+
+<section class="media-grid">
+  <aside class="panel history-panel">
+    <div class="panel-heading">
+      <div>
+        <p class="eyebrow">Library</p>
+        <h2>History</h2>
+      </div>
+    </div>
+    <div id="history-list" class="history-list"></div>
+  </aside>
+
+  <section class="panel player-panel">
+    <div class="panel-heading">
+      <div>
+        <p class="eyebrow">Playback</p>
+        <h2>Video player</h2>
+      </div>
+    </div>
+    <div id="player-empty" class="empty-state">Complete a download, then choose an item from History to play it here.</div>
+    <div id="player-wrap" class="player-wrap" hidden>
+      <video id="video-player" class="video-player" controls preload="metadata"></video>
+      <div class="player-meta">
+        <strong id="player-title"></strong>
+        <span id="player-path"></span>
+      </div>
+    </div>
+  </section>
+</section>
+
+<section class="panel jobs-panel">
+  <div class="panel-heading">
+    <div>
+      <p class="eyebrow">Activity</p>
+      <h2>Jobs</h2>
+    </div>
+    <button class="button" id="refresh-jobs" type="button">Refresh</button>
+  </div>
+  <div id="jobs-list" class="jobs-list" data-initial-jobs='{{ jobs | tojson }}'></div>
+</section>
+{% endblock %}

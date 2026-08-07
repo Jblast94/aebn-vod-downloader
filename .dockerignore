@@ -1,0 +1,12 @@
+.git
+.venv
+__pycache__
+*.py[cod]
+*.log
+.ruff_cache
+.pytest_cache
+downloads
+work
+work_dir
+output_dir
+colab.ipynb
