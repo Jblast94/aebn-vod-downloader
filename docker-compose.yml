@@ -7,9 +7,9 @@ services:
     restart: unless-stopped
     labels:
       - "docktail.service.enable=true"
-      - "docktail.service.name=aebn"
+      - "docktail.service.name=aebn-dl"
       - "docktail.service.port=8787"
-      - "docktail.service.service-port=443"
+      - "docktail.service.service-protocol=http"
     ports:
       - "${AEBNDL_WEB_PORT:-8787}:8787"
     environment:
