@@ -9,7 +9,7 @@ services:
       - "docktail.service.enable=true"
       - "docktail.service.name=aebn-dl"
       - "docktail.service.port=8787"
-      - "docktail.service.service-protocol=http"
+      - "docktail.service.service-protocol=https"
     ports:
       - "${AEBNDL_WEB_PORT:-8787}:8787"
     environment:
