@@ -12,3 +12,7 @@ class Forbidden(CustomException):
 
 class FFmpegError(CustomException):
     pass
+
+
+class ScraperError(CustomException):
+    pass

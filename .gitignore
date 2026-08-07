@@ -6,6 +6,10 @@ __pycache__
 /work_dir
 /output_dir
 *.log
+*.db
+*.db-shm
+*.db-wal
+.env
 /mnt/storage/projects/aebn-vod-downloader/296509
 /mnt/storage/projects/aebn-vod-downloader/325587
 /mnt/storage/projects/aebn-vod-downloader/.venv

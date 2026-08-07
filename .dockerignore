@@ -1,8 +1,12 @@
 .git
+.env
 .venv
 __pycache__
 *.py[cod]
 *.log
+*.db
+*.db-shm
+*.db-wal
 .ruff_cache
 .pytest_cache
 downloads

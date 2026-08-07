@@ -20,22 +20,23 @@ def remove_chars(text: str) -> str:
     return text
 
 
-def new_logger(name: str, log_level: str) -> logging.Logger:
+def new_logger(name: str, log_level: str, log_dir: str = "") -> logging.Logger:
     logger = logging.getLogger(name)
-    logger.setLevel(logging.DEBUG)  # Set the logger level to the lowest (DEBUG)
+    logger.setLevel(logging.DEBUG)
     logger.propagate = False
 
     formatter = logging.Formatter("%(asctime)s|%(levelname)s|%(message)s", datefmt="%H:%M:%S")
 
-    # Console handler with user set level
     console_handler = logging.StreamHandler()
     console_handler.setLevel(log_level)
     console_handler.set_name("console_handler")
     console_handler.setFormatter(formatter)
     logger.addHandler(console_handler)
 
-    # File handler with DEBUG level
-    file_handler = logging.FileHandler(f"{name}.log")
+    log_path = os.path.join(log_dir, f"{name}.log") if log_dir else f"{name}.log"
+    if log_dir:
+        os.makedirs(log_dir, exist_ok=True)
+    file_handler = logging.FileHandler(log_path)
     file_handler.setLevel(logging.DEBUG)
     file_handler.set_name("file_handler")
     file_handler.setFormatter(formatter)
@@ -67,11 +68,9 @@ def duration_to_seconds(duration: str) -> int:
 
 def ffmpeg_mux_streams(stream_path_1: str, stream_path_2: str, output_path: str) -> None:
     """Mux two media streams with ffmpeg"""
-    cmd = f'ffmpeg -i "{stream_path_1}" -i "{stream_path_2}" -y -c copy "{output_path}"  -loglevel warning'
-
-    out = subprocess.run(cmd, shell=True, capture_output=True, text=True, check=False)
-
-    if not out.returncode == 0:
+    cmd = ["ffmpeg", "-i", stream_path_1, "-i", stream_path_2, "-y", "-c", "copy", output_path, "-loglevel", "warning"]
+    out = subprocess.run(cmd, capture_output=True, text=True, check=False)
+    if out.returncode != 0:
         raise FFmpegError(out.stderr)
 
 

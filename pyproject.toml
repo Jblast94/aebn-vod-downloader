@@ -27,7 +27,12 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["lxml-stubs", "ruff"]
+dev = [
+    "httpx>=0.28.1",
+    "lxml-stubs",
+    "pytest>=8.3.5",
+    "ruff",
+]
 
 [project.scripts]
 aebndl = "aebn_dl.cli:main"

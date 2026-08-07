@@ -5,7 +5,10 @@ ENV PYTHONUNBUFFERED=1 \
     AEBNDL_HOST=0.0.0.0 \
     AEBNDL_PORT=8787 \
     AEBNDL_OUTPUT_DIR=/downloads \
-    AEBNDL_WORK_DIR=/work
+    AEBNDL_WORK_DIR=/work \
+    AEBNDL_DB_PATH=/downloads/aebndl-jobs.db \
+    AEBNDL_MAX_CONCURRENT_JOBS=1 \
+    AEBNDL_JOB_RETENTION_HOURS=0
 
 WORKDIR /app
 
@@ -19,6 +22,11 @@ COPY aebn_dl ./aebn_dl
 RUN uv sync --frozen --no-dev
 
 RUN mkdir -p /downloads /work
+
+RUN useradd -m -u 1000 appuser \
+    && chown -R appuser:appuser /downloads /work /app
+
+USER appuser
 
 EXPOSE 8787
 

@@ -113,6 +113,19 @@ select {
   margin: 0;
 }
 
+.panel-actions,
+.job-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.queue-meta {
+  color: var(--muted);
+  font-size: 0.84rem;
+}
+
 .field-row {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -153,7 +166,7 @@ select {
 
 .toggles {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
   margin: 8px 0 20px;
 }
@@ -277,7 +290,8 @@ select {
   background: rgba(63, 185, 80, 0.12);
 }
 
-.status-failed {
+.status-failed,
+.status-cancelled {
   color: var(--danger);
   background: rgba(248, 81, 73, 0.12);
 }
@@ -290,11 +304,16 @@ select {
   padding-left: 20px;
 }
 
-.outputs li {
+.outputs li,
+.output-actions,
+.subtitle-actions {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: 12px;
+}
+
+.outputs li {
+  justify-content: space-between;
 }
 
 .outputs span {
@@ -311,6 +330,27 @@ select {
   cursor: pointer;
   font-weight: 800;
   padding: 4px 0;
+}
+
+.text-button:disabled {
+  color: var(--muted);
+  cursor: wait;
+}
+
+.danger-action {
+  color: var(--danger);
+}
+
+.subtitle-actions {
+  color: var(--muted);
+  flex-wrap: wrap;
+  font-size: 0.84rem;
+}
+
+.subtitle-state {
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 2px 8px;
 }
 
 .history-list {

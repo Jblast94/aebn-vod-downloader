@@ -21,14 +21,14 @@ class Manifest:
         self.total_number_of_data_segments: int | None = None
         self.video_stream = VideoStream()
         self.audio_stream = AudioStream()
-        self.avaliable_resulutions: list[int] | None = None
+        self.available_resolutions: list[int] | None = None
 
     def parse_content(self, manifest_content: str) -> None:
         """Parse the XML manifest content"""
         root = ET.fromstring(manifest_content, None)
         self.total_number_of_data_segments = self._total_number_of_data_segments_calc(root, self.total_duration_seconds)
         video_streams = self._parse_and_sort_video_streams(root)
-        self.avaliable_resulutions = [video_stream[1] for video_stream in video_streams]
+        self.available_resolutions = [video_stream[1] for video_stream in video_streams]
         audio_stream_id = self._find_best_good_audio_stream(video_streams)
         self.audio_stream.stream_id = audio_stream_id
         self._set_video_stream_data(video_streams)

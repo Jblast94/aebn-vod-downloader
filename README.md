@@ -10,8 +10,12 @@ A Python downloader for AEBN VOD titles with both a CLI and a local web UI. The 
 - Web UI command: `aebndl-web`
 - Movie info preview before downloading
 - Background download jobs with live status and logs
-- Completed-download history list
+- Persistent completed-download history backed by SQLite
+- Configurable download queue and job concurrency limit
+- Job cancel/delete actions and clear-completed cleanup
+- URL list upload for starting one queued job per URL
 - Integrated browser video player for completed output files
+- Automated `.srt` subtitle generation with a RunPod Faster-Whisper endpoint
 - Docker Compose deployment with mounted download/work directories
 - Docktail labels for service discovery/tagging in a Tailscale tailnet
 
@@ -80,6 +84,17 @@ The project includes a `.env` file for Docker Compose.
 AEBNDL_WEB_PORT=8787
 AEBNDL_REMOTE_DOWNLOAD_DIR=/mnt/storage/downloads
 AEBNDL_REMOTE_WORK_DIR=/mnt/storage/downloads/aebndl-work
+AEBNDL_DB_PATH=/downloads/aebndl-jobs.db
+AEBNDL_MAX_CONCURRENT_JOBS=1
+AEBNDL_JOB_RETENTION_HOURS=0
+AEBNDL_RUNPOD_ENDPOINT_URL=https://api.runpod.ai/v2/bfarkaz0uwuhcn
+AEBNDL_RUNPOD_AUDIO_FIELD=audio_base64
+AEBNDL_RUNPOD_UPLOAD_TIMEOUT=600
+AEBNDL_SUBTITLE_CHUNK_MINUTES=10
+AEBNDL_SUBTITLE_MAX_CHUNK_MB=50
+AEBNDL_AUTO_SUBTITLES=true
+AEBNDL_SUBTITLE_LANGUAGE=
+RUNPOD_API_KEY=
 TZ=America/New_York
 ```
 
@@ -90,6 +105,17 @@ Environment variables:
 | `AEBNDL_WEB_PORT` | Host port mapped to the web UI container port `8787`. |
 | `AEBNDL_REMOTE_DOWNLOAD_DIR` | Host path mounted into the container as `/downloads`. |
 | `AEBNDL_REMOTE_WORK_DIR` | Host path mounted into the container as `/work`. |
+| `AEBNDL_DB_PATH` | SQLite job history path inside the container. Defaults to `/downloads/aebndl-jobs.db`. |
+| `AEBNDL_MAX_CONCURRENT_JOBS` | Maximum number of downloads allowed to run at the same time. Defaults to `1`. |
+| `AEBNDL_JOB_RETENTION_HOURS` | Auto-prunes completed/failed/cancelled jobs older than this many hours. `0` disables pruning. |
+| `AEBNDL_RUNPOD_ENDPOINT_URL` | RunPod Faster-Whisper endpoint base URL. |
+| `AEBNDL_RUNPOD_AUDIO_FIELD` | JSON input field used for the base64 audio payload. Defaults to `audio_base64`. |
+| `AEBNDL_RUNPOD_UPLOAD_TIMEOUT` | Upload timeout, in seconds, for RunPod subtitle requests. |
+| `AEBNDL_SUBTITLE_CHUNK_MINUTES` | Length of audio chunks sent to RunPod for long media files. |
+| `AEBNDL_SUBTITLE_MAX_CHUNK_MB` | Maximum extracted audio chunk size before subtitle generation fails with guidance. |
+| `AEBNDL_AUTO_SUBTITLES` | Enables automatic subtitle generation after downloads when `true`. |
+| `AEBNDL_SUBTITLE_LANGUAGE` | Optional Whisper language hint. Leave empty for auto-detect. |
+| `RUNPOD_API_KEY` | Required RunPod API key for subtitle generation. |
 | `TZ` | Container timezone, using a valid TZ database name such as `America/New_York`. |
 
 Inside the container, the web UI uses `/downloads` as the default output directory and `/work` as the default temporary work directory.
@@ -101,9 +127,9 @@ Inside the container, the web UI uses `/downloads` as the default output directo
 ```yaml
 labels:
   - "docktail.service.enable=true"
-  - "docktail.service.name=aebn"
+  - "docktail.service.name=aebn-dl"
   - "docktail.service.port=8787"
-  - "docktail.service.service-port=443"
+  - "docktail.service.service-protocol=http"
 ```
 
 ## User Guides
@@ -140,6 +166,7 @@ labels:
 
 ## Notes
 
-- The web UI history is in-memory and resets when the server restarts.
+- Web UI history is persisted in SQLite at `AEBNDL_DB_PATH`.
 - The integrated video player can only play completed output files that still exist on disk.
+- Subtitle generation requires `RUNPOD_API_KEY`; leave `AEBNDL_AUTO_SUBTITLES=false` to disable automatic transcription.
 - Use `uv run --extra dev ruff check .` to run lint checks.

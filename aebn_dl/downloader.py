@@ -8,7 +8,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from contextlib import nullcontext
 from pathlib import Path
-from threading import Lock
+from threading import Event, Lock
 from typing import Literal
 
 from rich.live import Live
@@ -55,6 +55,7 @@ class Downloader:
         keep_logs: bool = False,
         show_progress: bool = True,
         split_scenes: bool = False,
+        cancel_event: Event | None = None,
     ):
         """
         Args:
@@ -102,14 +103,19 @@ class Downloader:
         self.threads = threads
         self.proxy_metadata_only = proxy_metadata_only
         self.split_scenes = split_scenes
-        self.logger = utils.new_logger(name=self._movie_logger_name(), log_level=log_level)
+        self.logger = utils.new_logger(name=self._movie_logger_name(), log_level=log_level, log_dir=self.work_dir)
         self.is_silent = self.logger.getEffectiveLevel() > logging.INFO
         self.movie_work_dir: str | None = None
         self.manifest: Manifest | None = None
         self.session: CustomSession | None = None
         self.manifest_lock = Lock()
         self.show_progress = show_progress
+        self.cancel_event = cancel_event or Event()
         self.progress = self._init_progress()
+
+    def _raise_if_cancelled(self) -> None:
+        if self.cancel_event.is_set():
+            raise RuntimeError("Download cancelled")
 
     def _init_progress(self) -> Progress:
         return Progress(
@@ -125,11 +131,14 @@ class Downloader:
         """Executes the movie download process."""
         context = (self.show_progress and Live(self.progress)) or nullcontext()
         with context:
+            self._raise_if_cancelled()
             self._initialize_download()
             scraped_movie = self._scrape_movie_info()
+            self._raise_if_cancelled()
             should_embed_metadata = not any((self.no_metadata, self.scene_n, self.start_segment, self.end_segment))
             requires_scene_boundaries = bool(self.scene_n or self.split_scenes or should_embed_metadata)
             self._process_manifest(scraped_movie, requires_scene_boundaries)
+            self._raise_if_cancelled()
             self._create_dirs(scraped_movie.movie_id)
             self._set_stream_paths()
             if self.download_covers:
@@ -137,6 +146,7 @@ class Downloader:
 
             # Download all segments
             self._download_streams(scraped_movie)
+            self._raise_if_cancelled()
 
             if self.split_scenes:
                 # Process each scene separately
@@ -164,7 +174,7 @@ class Downloader:
 
         print(f"\n{movie.studio_name} - {movie.title}")
         print(f"Duration: {movie.total_duration_seconds // 60} min ({movie.total_duration_seconds}s)")
-        print(f"Available resolutions: {self.manifest.avaliable_resulutions}")
+        print(f"Available resolutions: {self.manifest.available_resolutions}")
         print("Performers: {}\n".format(", ".join(movie.performers) if movie.performers else "N/A"))
 
         print("Scenes and Segment Boundaries:")
@@ -204,8 +214,10 @@ class Downloader:
     def _delete_log(self) -> None:
         for handler in self.logger.handlers:
             if isinstance(handler, logging.FileHandler):
-                handler.close()  # Close the file handler before deleting the file
-        os.remove(f"{self.logger.name}.log")
+                log_path = handler.baseFilename
+                handler.close()
+                if os.path.exists(log_path):
+                    os.remove(log_path)
 
     def _log_init_state(self) -> None:
         """Log input arguments"""
@@ -294,6 +306,7 @@ class Downloader:
         self.logger.info(f"Processing {total_scenes} scenes as separate files")
 
         for scene_idx, scene in enumerate(scraped_movie.scenes, 1):
+            self._raise_if_cancelled()
             self.logger.info(f"Processing scene {scene_idx}/{total_scenes}")
 
             # Generate output name for this scene
@@ -484,6 +497,7 @@ class Downloader:
         with ThreadPoolExecutor(max_workers=2) as executor:
             futures = {executor.submit(self._download_stream, stream, segment_range): stream for stream in streams_to_download}
             for future in as_completed(futures):
+                self._raise_if_cancelled()
                 stream = futures[future]
                 try:
                     future.result()
@@ -507,6 +521,7 @@ class Downloader:
         def download_task(segment_num: int, max_retries: int = 30) -> int | None:
             retries = 0
             while retries <= max_retries:
+                self._raise_if_cancelled()
                 try:
                     self._download_segment(stream, segment_number=segment_num)
                     return segment_num
@@ -533,6 +548,7 @@ class Downloader:
             futures = {executor.submit(download_task, i): i for i in segments_to_download}
 
             for future in as_completed(futures):
+                self._raise_if_cancelled()
                 try:
                     result = future.result()
                     if result is not None:
@@ -545,6 +561,7 @@ class Downloader:
 
     def _download_segment(self, stream: MediaStream, segment_number: int | None = None) -> None:
         """Download and save stream segment"""
+        self._raise_if_cancelled()
         if isinstance(segment_number, int):
             segment_name = f"{stream.media_type}_{stream.stream_id}_{segment_number}"
         else:
@@ -581,6 +598,7 @@ class Downloader:
         task = self.progress.add_task(description=f"Merging {desc}", total=len(_files))
         with open(output_path, "wb") as f:
             for segment_file_path in _files:
+                self._raise_if_cancelled()
                 with open(segment_file_path, "rb") as segment_file:
                     content = segment_file.read()
                     segment_file.close()

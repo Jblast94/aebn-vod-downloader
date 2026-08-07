@@ -11,6 +11,7 @@ class DownloadTest(unittest.TestCase):
         self.work_dir = os.path.join(os.getcwd(), "work_dir")
         self.output_dir = os.path.join(os.getcwd(), "output_dir")
 
+    @unittest.skipUnless(os.getenv("RUN_LIVE_AEBN_TESTS") == "1", "live AEBN download test")
     def test_movie_dl(self):
         Downloader(
             url=self.url,
@@ -25,6 +26,7 @@ class DownloadTest(unittest.TestCase):
             show_progress=True,
         ).run()
 
+    @unittest.skipUnless(os.getenv("RUN_LIVE_AEBN_TESTS") == "1", "live AEBN metadata test")
     def test_movie_info(self):
         Downloader(
             url=self.url,
