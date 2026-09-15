@@ -1,143 +1,124 @@
 # aebn-vod-downloader
 
-A Python downloader for AEBN VOD titles with both a CLI and a local web UI. The current project setup uses `uv` for Python dependency management and Docker Compose for container deployment.
+MVP for a **single remote Linux VM**: local downloader + web UI in one Compose stack. No second worker, no cloud GPU, no RunPod, no NFS required.
 
-[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/hyper440/aebn-vod-downloader/blob/main/colab.ipynb)
+Target test box: about 32 vCPU, 100 GB RAM, ~10 Gb NIC. Use this VM to develop and build a media library **before** any homelab NFS / Stash / Jellyfin / remote-worker work.
 
-## Features
+## Run on the VM
 
-- CLI command: `aebndl`
-- Web UI command: `aebndl-web`
-- Movie info preview before downloading
-- Background download jobs with live status and logs
-- Persistent completed-download history backed by SQLite
-- Configurable download queue and job concurrency limit
-- Job cancel/delete actions and clear-completed cleanup
-- URL list upload for starting one queued job per URL
-- Integrated browser video player for completed output files
-- Automated `.srt` subtitle generation with a RunPod Faster-Whisper endpoint
-- Docker Compose deployment with mounted download/work directories
-- Docktail labels for service discovery/tagging in a Tailscale tailnet
-
-## Requirements
-
-- Python 3.8 or higher for local CLI usage
-- `uv` for Python package management
-- FFmpeg in `PATH` for local runs
-- Docker and Docker Compose for container deployment
-
-The Docker image installs FFmpeg automatically.
-
-## Local Setup With uv
-
-Install dependencies:
+Need Docker Engine with the Compose plugin (`docker compose version`). Git clone this branch onto the VM.
 
 ```bash
-uv sync
-```
+git clone https://github.com/Jblast94/aebn-vod-downloader.git
+cd aebn-vod-downloader
+git checkout web-ui   # or this MVP branch
 
-Run the CLI:
-
-```bash
-uv run aebndl "https://*.aebn.com/*/movies/*" --resolution 720 --scene 2
-```
-
-Run the web UI:
-
-```bash
-uv run aebndl-web
-```
-
-Open the app at:
-
-```text
-http://127.0.0.1:8787
-```
-
-## Docker Compose
-
-The compose deployment runs the web UI and mounts host download locations into the container.
-
-Start the service:
-
-```bash
+cp .env.example .env
+mkdir -p downloads work
 docker compose up -d --build
 ```
 
-Open the app at:
+Wait until healthy:
 
-```text
-http://localhost:8787
+```bash
+docker compose ps
+curl -sf http://127.0.0.1:8787/health
 ```
 
-Stop the service:
+Expected health JSON:
+
+```json
+{"status":"ok","service":"aebndl-web","output_dir":"/downloads","work_dir":"/work"}
+```
+
+Open the UI:
+
+```text
+http://<vm-ip>:8787
+```
+
+Stop:
 
 ```bash
 docker compose down
 ```
 
-## Environment
+Logs:
 
-The project includes a `.env` file for Docker Compose.
+```bash
+docker compose logs -f aebndl-web
+```
+
+## Where files land
+
+| Role | In the container | On the VM (default) |
+| --- | --- | --- |
+| Completed media + SQLite job DB | `/downloads` | `./downloads` next to `docker-compose.yml` |
+| Temporary segments | `/work` | `./work` |
+
+That is the whole storage story for this MVP. Point the web form at `/downloads` and `/work` (Compose already sets those defaults).
+
+Optional: put media on a dedicated disk instead of the repo directory.
 
 ```env
-AEBNDL_WEB_PORT=8787
-AEBNDL_REMOTE_DOWNLOAD_DIR=/mnt/storage/downloads
-AEBNDL_REMOTE_WORK_DIR=/mnt/storage/downloads/aebndl-work
-AEBNDL_DB_PATH=/downloads/aebndl-jobs.db
-AEBNDL_MAX_CONCURRENT_JOBS=1
-AEBNDL_JOB_RETENTION_HOURS=0
-AEBNDL_RUNPOD_ENDPOINT_URL=https://api.runpod.ai/v2/bfarkaz0uwuhcn
-AEBNDL_RUNPOD_AUDIO_FIELD=audio_base64
-AEBNDL_RUNPOD_UPLOAD_TIMEOUT=600
-AEBNDL_SUBTITLE_CHUNK_MINUTES=10
-AEBNDL_SUBTITLE_MAX_CHUNK_MB=50
-AEBNDL_AUTO_SUBTITLES=true
-AEBNDL_SUBTITLE_LANGUAGE=
-RUNPOD_API_KEY=
-TZ=America/New_York
+AEBNDL_DOWNLOAD_DIR=/data/downloads
+AEBNDL_SEGMENT_DIR=/data/aebndl-work
 ```
 
-Environment variables:
+Then:
 
-| Variable | Purpose |
-| --- | --- |
-| `AEBNDL_WEB_PORT` | Host port mapped to the web UI container port `8787`. |
-| `AEBNDL_REMOTE_DOWNLOAD_DIR` | Host path mounted into the container as `/downloads`. |
-| `AEBNDL_REMOTE_WORK_DIR` | Host path mounted into the container as `/work`. |
-| `AEBNDL_DB_PATH` | SQLite job history path inside the container. Defaults to `/downloads/aebndl-jobs.db`. |
-| `AEBNDL_MAX_CONCURRENT_JOBS` | Maximum number of downloads allowed to run at the same time. Defaults to `1`. |
-| `AEBNDL_JOB_RETENTION_HOURS` | Auto-prunes completed/failed/cancelled jobs older than this many hours. `0` disables pruning. |
-| `AEBNDL_RUNPOD_ENDPOINT_URL` | RunPod Faster-Whisper endpoint base URL. |
-| `AEBNDL_RUNPOD_AUDIO_FIELD` | JSON input field used for the base64 audio payload. Defaults to `audio_base64`. |
-| `AEBNDL_RUNPOD_UPLOAD_TIMEOUT` | Upload timeout, in seconds, for RunPod subtitle requests. |
-| `AEBNDL_SUBTITLE_CHUNK_MINUTES` | Length of audio chunks sent to RunPod for long media files. |
-| `AEBNDL_SUBTITLE_MAX_CHUNK_MB` | Maximum extracted audio chunk size before subtitle generation fails with guidance. |
-| `AEBNDL_AUTO_SUBTITLES` | Enables automatic subtitle generation after downloads when `true`. |
-| `AEBNDL_SUBTITLE_LANGUAGE` | Optional Whisper language hint. Leave empty for auto-detect. |
-| `RUNPOD_API_KEY` | Required RunPod API key for subtitle generation. |
-| `TZ` | Container timezone, using a valid TZ database name such as `America/New_York`. |
-
-Inside the container, the web UI uses `/downloads` as the default output directory and `/work` as the default temporary work directory.
-
-## Docktail Labels
-
-`docker-compose.yml` includes labels for Docktail service discovery/tagging:
-
-```yaml
-labels:
-  - "docktail.service.enable=true"
-  - "docktail.service.name=aebn-dl"
-  - "docktail.service.port=8787"
-  - "docktail.service.service-protocol=http"
+```bash
+sudo mkdir -p /data/downloads /data/aebndl-work
+sudo chown "$USER:$USER" /data/downloads /data/aebndl-work
+docker compose up -d
 ```
 
-## User Guides
+**Not required for MVP:** homelab NFS (`/mnt/storage/downloads`). Use that later when this stack has been tested on the VM.
+
+## What this stack is
+
+- One service: `aebndl-web`
+- Downloads run **in that container** on this VM
+- Web UI on port `8787` (override with `AEBNDL_WEB_PORT`)
+- Subtitle / RunPod paths are **off**. Checking “Generate subtitles” is skipped so a download cannot depend on a remote transcriber.
+
+On a 10 Gb NIC you can raise **Threads** in the download form (for example 16). Keep `AEBNDL_MAX_CONCURRENT_JOBS=1` unless you know the site will tolerate more than one title at a time.
+
+## `.env`
+
+Copy from `.env.example`. Do not put API keys or tokens in git.
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `AEBNDL_WEB_PORT` | `8787` | Host port for the UI |
+| `AEBNDL_DOWNLOAD_DIR` | `./downloads` | VM directory bind-mounted as `/downloads` |
+| `AEBNDL_SEGMENT_DIR` | `./work` | VM directory bind-mounted as `/work` |
+| `AEBNDL_DB_PATH` | `/downloads/aebndl-jobs.db` | Job history inside the container |
+| `AEBNDL_MAX_CONCURRENT_JOBS` | `1` | Parallel title downloads |
+| `AEBNDL_JOB_RETENTION_HOURS` | `0` | `0` keeps history; otherwise prune old jobs |
+| `TZ` | `UTC` | Container timezone |
+
+## Later (not this MVP)
+
+- **Stash / Jellyfin:** add a library watch folder on the **same path the VM writes** (`./downloads` or `/data/downloads`). Do not add `./work`. API hooks and metadata push are follow-up work.
+- **Homelab NFS:** retarget `AEBNDL_DOWNLOAD_DIR` to `/mnt/storage/downloads` after VM testing.
+- **Optional remote workers / RunPod subtitles:** follow-up. This MVP must run with no extra stack.
+
+## CLI (optional, same VM)
+
+```bash
+uv sync
+uv run aebndl "https://*.aebn.com/*/movies/*" --resolution 720 -o ./downloads -w ./work
+```
+
+Needs FFmpeg on the host if you skip Docker.
+
+## More UI detail
 
 - [Web UI User Guide](docs/USER_GUIDE.md)
-- [Deployment Guide](docs/DEPLOYMENT.md)
+- [Deployment notes](docs/DEPLOYMENT.md)
 
-## CLI Arguments
+## CLI arguments
 
 | Flags | Argument | Description |
 | --- | --- | --- |
@@ -163,10 +144,3 @@ labels:
 | `-ac` | `--aggressive-cleaning` | Delete segments as soon as they are joined into streams. |
 | `-t` | `--threads` | Number of download threads. Defaults to `5`. |
 | `-l` | `--log-level` | Logging level. Defaults to `INFO`. |
-
-## Notes
-
-- Web UI history is persisted in SQLite at `AEBNDL_DB_PATH`.
-- The integrated video player can only play completed output files that still exist on disk.
-- Subtitle generation requires `RUNPOD_API_KEY`; leave `AEBNDL_AUTO_SUBTITLES=false` to disable automatic transcription.
-- Use `uv run --extra dev ruff check .` to run lint checks.

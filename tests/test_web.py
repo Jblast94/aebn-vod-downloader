@@ -3,7 +3,18 @@ from datetime import datetime
 import pytest
 from fastapi import HTTPException
 
-from aebn_dl.web import DownloadJob, DownloadOptions, build_options, options_from_dict, options_to_dict, serialize_job
+from aebn_dl.web import (
+    DownloadJob,
+    DownloadOptions,
+    build_options,
+    generate_subtitles_for_output,
+    jobs,
+    jobs_lock,
+    options_from_dict,
+    options_to_dict,
+    runtime_status,
+    serialize_job,
+)
 
 
 def test_build_options_rejects_split_scene_conflict():
@@ -57,3 +68,30 @@ def test_serialize_job_marks_completed_outputs_playable(tmp_path):
     assert serialized["outputs"][0]["media_url"] == "/media/abc123/0"
     assert serialized["outputs"][0]["subtitle_url"] == "/subtitle-files/abc123/0"
     assert serialized["outputs"][0]["subtitle_status"] == "completed"
+
+
+def test_runtime_status_reports_ok():
+    status = runtime_status()
+    assert status["status"] == "ok"
+    assert status["service"] == "aebndl-web"
+
+
+def test_subtitle_generation_is_skipped_without_remote_backend(monkeypatch, tmp_path):
+    monkeypatch.setattr("aebn_dl.web.persist_job", lambda job: None)
+    media = tmp_path / "movie.mp4"
+    media.write_bytes(b"fake")
+    job = DownloadJob(
+        id="mvp-skip-subs",
+        options=DownloadOptions(url="https://example.test/movie", generate_subtitles=True),
+        status="completed",
+        output_paths=[str(media)],
+    )
+    with jobs_lock:
+        jobs[job.id] = job
+    try:
+        generate_subtitles_for_output(job.id, 0)
+        assert job.status == "completed"
+        assert job.subtitle_status[0]["status"] == "skipped"
+    finally:
+        with jobs_lock:
+            jobs.pop(job.id, None)
