@@ -2,6 +2,7 @@ FROM ghcr.io/astral-sh/uv:python3.13-bookworm-slim
 
 ENV PYTHONUNBUFFERED=1 \
     UV_LINK_MODE=copy \
+    UV_NO_SYNC=1 \
     AEBNDL_HOST=0.0.0.0 \
     AEBNDL_PORT=8787 \
     AEBNDL_OUTPUT_DIR=/downloads \
@@ -30,4 +31,4 @@ USER appuser
 
 EXPOSE 8787
 
-CMD ["uv", "run", "aebndl-web"]
+CMD ["/app/.venv/bin/aebndl-web"]
