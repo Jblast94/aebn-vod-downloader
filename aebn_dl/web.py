@@ -21,7 +21,7 @@ from fastapi.templating import Jinja2Templates
 
 from . import db as _db
 from .downloader import Downloader
-from .subtitles import SubtitleError, generate_subtitle_file, subtitle_path_for
+from .subtitles import SubtitleError, subtitle_path_for
 
 PACKAGE_DIR = Path(__file__).resolve().parent
 TEMPLATES_DIR = PACKAGE_DIR / "templates"
@@ -29,7 +29,7 @@ STATIC_DIR = PACKAGE_DIR / "static"
 
 DEFAULT_OUTPUT_DIR = os.getenv("AEBNDL_OUTPUT_DIR", "")
 DEFAULT_WORK_DIR = os.getenv("AEBNDL_WORK_DIR", "")
-DEFAULT_AUTO_SUBTITLES = os.getenv("AEBNDL_AUTO_SUBTITLES", "true").lower() in {"1", "true", "yes", "on"}
+DEFAULT_AUTO_SUBTITLES = os.getenv("AEBNDL_AUTO_SUBTITLES", "false").lower() in {"1", "true", "yes", "on"}
 MAX_CONCURRENT_JOBS = int(os.getenv("AEBNDL_MAX_CONCURRENT_JOBS", "1"))
 JOB_RETENTION_HOURS = float(os.getenv("AEBNDL_JOB_RETENTION_HOURS", "0"))
 
@@ -419,15 +419,10 @@ def generate_subtitles_for_output(job_id: str, output_index: int) -> None:
             raise SubtitleError("Output not found")
         output_path = Path(job.output_paths[output_index])
 
-    update_subtitle_status(job_id, output_index, status="running", error="")
-    append_job_log(job_id, f"Subtitle generation started for {output_path.name}")
-    try:
-        subtitle_path = generate_subtitle_file(output_path)
-        update_subtitle_status(job_id, output_index, status="completed", path=str(subtitle_path), error="")
-        append_job_log(job_id, f"Subtitle generation completed: {subtitle_path}")
-    except Exception as exc:
-        update_subtitle_status(job_id, output_index, status="failed", error=str(exc))
-        append_job_log(job_id, f"Subtitle generation failed for {output_path.name}: {exc}")
+    skip_reason = "Subtitle generation is disabled for this MVP; downloads do not call a remote transcriber."
+    update_subtitle_status(job_id, output_index, status="skipped", error=skip_reason)
+    append_job_log(job_id, f"Skipping subtitles for {output_path.name}: {skip_reason}")
+    return
 
 
 def start_subtitle_job(job_id: str, output_index: int) -> None:
@@ -442,6 +437,15 @@ def _parse_url_list(text: str) -> list[str]:
         if line and not line.startswith("#"):
             urls.append(line)
     return urls
+
+
+def runtime_status() -> dict[str, Any]:
+    return {
+        "status": "ok",
+        "service": "aebndl-web",
+        "output_dir": DEFAULT_OUTPUT_DIR or "/downloads",
+        "work_dir": DEFAULT_WORK_DIR or "/work",
+    }
 
 
 def build_options(
@@ -501,6 +505,11 @@ def build_options(
         split_scenes=split_scenes,
         generate_subtitles=generate_subtitles,
     )
+
+
+@app.get("/health", response_class=JSONResponse)
+async def health() -> JSONResponse:
+    return JSONResponse(runtime_status())
 
 
 @app.get("/", response_class=HTMLResponse)

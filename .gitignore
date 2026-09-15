@@ -10,6 +10,8 @@ __pycache__
 *.db-shm
 *.db-wal
 .env
+/downloads
+/work
 /mnt/storage/projects/aebn-vod-downloader/296509
 /mnt/storage/projects/aebn-vod-downloader/325587
 /mnt/storage/projects/aebn-vod-downloader/.venv
