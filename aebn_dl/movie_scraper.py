@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import math
 
 from lxml import html
@@ -8,6 +9,14 @@ from . import utils
 from .custom_session import CustomSession
 from .exceptions import ScraperError
 from .models import Scene
+
+logger = logging.getLogger(__name__)
+
+MOBILE_SCENE_XPATHS = (
+    '//div[@class="scroller"]',
+    '//div[contains(concat(" ", normalize-space(@class), " "), " scroller ")]',
+    '//*[@data-time-start][@data-time-duration]',
+)
 
 
 class Movie:
@@ -82,21 +91,38 @@ class Movie:
             return studio_names[0].replace(",", "").strip()
         return ""
 
+    def has_scene_timings(self) -> bool:
+        return any(scene.start_timing is not None and scene.end_timing is not None for scene in self.scenes)
+
     def calculate_scenes_boundaries(self, segment_duration: float):
-        """Calculate scene segment boundaries with data from m.aebn.net"""
+        """Calculate scene segment boundaries with data from m.aebn.net.
+
+        Missing or unrecognized mobile scene markup is treated as empty: log a
+        warning and continue so metadata/info and full-title downloads still work.
+        """
         response = self._session.get(f"https://m.aebn.net/movie/{self.movie_id}")
         html_tree = html.fromstring(response.content)
-        scene_elems = html_tree.xpath('//div[@class="scroller"]')
+        scene_elems = []
+        for xpath in MOBILE_SCENE_XPATHS:
+            scene_elems = html_tree.xpath(xpath)
+            if scene_elems:
+                break
         if not scene_elems:
-            raise ScraperError("Failed to scrape scene data — mobile AEBN page structure may have changed.")
-        if len(scene_elems) != len(self.scenes):
-            raise ScraperError(f"Scene count mismatch: mobile={len(scene_elems)}, movie={len(self.scenes)}")
+            logger.warning("No scene data found on mobile AEBN page; continuing without scene boundaries")
+            return
+        if not self.scenes:
+            self.scenes = [Scene(performers=[]) for _ in scene_elems]
+        elif len(scene_elems) != len(self.scenes):
+            logger.warning("Scene count mismatch: mobile=%s, movie=%s; using overlapping scenes only", len(scene_elems), len(self.scenes))
         for i, scene_el in enumerate(scene_elems):
+            if i >= len(self.scenes):
+                break
             target_scene = self.scenes[i]
             time_start = scene_el.get("data-time-start")
             time_duration = scene_el.get("data-time-duration")
             if time_start is None or time_duration is None:
-                raise ScraperError(f"Scene {i + 1} is missing timing attributes — AEBN mobile page structure may have changed.")
+                logger.warning("Scene %s is missing timing attributes; skipping", i + 1)
+                continue
             target_scene.start_timing = int(time_start)
             target_scene.end_timing = target_scene.start_timing + int(time_duration)
             target_scene.start_segment = math.floor(int(target_scene.start_timing) / segment_duration)

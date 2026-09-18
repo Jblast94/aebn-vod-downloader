@@ -24,10 +24,20 @@ from rich.progress import (
 
 from . import utils
 from .custom_session import CustomSession
-from .exceptions import Forbidden
+from .exceptions import Forbidden, ScraperError
 from .manifest_parser import Manifest
 from .models import MediaStream
 from .movie_scraper import Movie
+
+
+def _resolve_dir(explicit: str, env_name: str) -> str:
+    """Prefer an explicit path, then the process env, and only then cwd."""
+    if explicit:
+        return explicit
+    env_value = os.getenv(env_name, "")
+    if env_value:
+        return env_value
+    return os.getcwd()
 
 
 class Downloader:
@@ -83,8 +93,8 @@ class Downloader:
         """
 
         self.input_url = url
-        self.output_dir = output_dir or os.getcwd()
-        self.work_dir = work_dir or os.getcwd()
+        self.output_dir = _resolve_dir(output_dir, "AEBNDL_OUTPUT_DIR")
+        self.work_dir = _resolve_dir(work_dir, "AEBNDL_WORK_DIR")
         self.target_height = target_height
         self.force_resolution = force_resolution
         self.include_performer_names = include_performer_names
@@ -113,6 +123,10 @@ class Downloader:
         self.cancel_event = cancel_event or Event()
         self.progress = self._init_progress()
 
+    def _scene_boundaries_required(self) -> bool:
+        """Scene timings are required only when the user asked to split or pick a scene."""
+        return bool(self.scene_n or self.split_scenes)
+
     def _raise_if_cancelled(self) -> None:
         if self.cancel_event.is_set():
             raise RuntimeError("Download cancelled")
@@ -136,8 +150,7 @@ class Downloader:
             scraped_movie = self._scrape_movie_info()
             self._raise_if_cancelled()
             should_embed_metadata = not any((self.no_metadata, self.scene_n, self.start_segment, self.end_segment))
-            requires_scene_boundaries = bool(self.scene_n or self.split_scenes or should_embed_metadata)
-            self._process_manifest(scraped_movie, requires_scene_boundaries)
+            self._process_manifest(scraped_movie, requires_scene_boundaries=self._scene_boundaries_required() or should_embed_metadata)
             self._raise_if_cancelled()
             self._create_dirs(scraped_movie.movie_id)
             self._set_stream_paths()
@@ -179,6 +192,18 @@ class Downloader:
 
         print("Scenes and Segment Boundaries:")
         print("---------------------------------")
+        if not movie.has_scene_timings():
+            print("No scene timing data available.")
+            for i, scene in enumerate(movie.scenes, 1):
+                performers = ", ".join(scene.performers) if scene.performers else "N/A"
+                print(f"Scene {i}")
+                print("Start time: unavailable")
+                print("End time:   unavailable")
+                print("Segments:   unavailable")
+                print(f"Performers: {performers}")
+                print("──────────────────────────────────────────────")
+            return
+
         for i, scene in enumerate(movie.scenes, 1):
             performers = ", ".join(scene.performers) if scene.performers else "N/A"
             print(f"Scene {i}")
@@ -420,6 +445,8 @@ class Downloader:
         self.manifest.process_manifest()
         if requires_scene_boundaries:
             scraped_movie.calculate_scenes_boundaries(self.manifest.segment_duration)
+            if self._scene_boundaries_required() and not scraped_movie.has_scene_timings():
+                raise ScraperError("Scene splits requested but scene data is unavailable.")
 
     def _scrape_movie_info(self) -> Movie:
         """Scrapes movie information from the input URL."""

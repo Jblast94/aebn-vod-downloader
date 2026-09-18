@@ -114,6 +114,8 @@ def embed_metadata(input_path: str | Path, movie: Movie) -> None:
     metadata_content = ";FFMETADATA1\n\n"
     metadata_content += f"title={movie.title}\n\n"
     for i, scene in enumerate(movie.scenes):
+        if scene.start_timing is None or scene.end_timing is None:
+            continue
         # Convert timing to milliseconds
         start_time_ms = scene.start_timing * 1000
         end_time_ms = scene.end_timing * 1000

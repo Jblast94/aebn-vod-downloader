@@ -712,6 +712,8 @@ async def movie_info(
     def _fetch_info() -> str:
         downloader = Downloader(
             url=clean_url,
+            output_dir=DEFAULT_OUTPUT_DIR,
+            work_dir=DEFAULT_WORK_DIR,
             target_height=optional_int(resolution),
             proxy=proxy.strip(),
             proxy_metadata_only=proxy_metadata_only,

@@ -6,10 +6,10 @@ from dataclasses import dataclass, field
 @dataclass
 class Scene:
     performers: list
-    start_timing: int = field(init=False)
-    end_timing: int = field(init=False)
-    start_segment: int = field(init=False)
-    end_segment: int = field(init=False)
+    start_timing: int | None = None
+    end_timing: int | None = None
+    start_segment: int | None = None
+    end_segment: int | None = None
 
 
 @dataclass

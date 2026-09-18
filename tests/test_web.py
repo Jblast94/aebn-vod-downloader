@@ -1,11 +1,15 @@
 from datetime import datetime
+from types import SimpleNamespace
 
 import pytest
 from fastapi import HTTPException
+from fastapi.testclient import TestClient
 
+from aebn_dl.movie_scraper import Movie
 from aebn_dl.web import (
     DownloadJob,
     DownloadOptions,
+    app,
     build_options,
     generate_subtitles_for_output,
     jobs,
@@ -15,6 +19,7 @@ from aebn_dl.web import (
     runtime_status,
     serialize_job,
 )
+from tests.helpers import MOVIE_URL, session_for
 
 
 def test_build_options_rejects_split_scene_conflict():
@@ -74,6 +79,49 @@ def test_runtime_status_reports_ok():
     status = runtime_status()
     assert status["status"] == "ok"
     assert status["service"] == "aebndl-web"
+
+
+def test_info_uses_configured_output_and_work_dirs(monkeypatch):
+    captured = {}
+
+    class FakeDownloader:
+        def __init__(self, **kwargs):
+            captured.update(kwargs)
+
+        def print_info(self):
+            print("Fixture Studio - Fixture Title")
+
+    monkeypatch.setattr("aebn_dl.web.Downloader", FakeDownloader)
+    monkeypatch.setattr("aebn_dl.web.DEFAULT_OUTPUT_DIR", "/downloads")
+    monkeypatch.setattr("aebn_dl.web.DEFAULT_WORK_DIR", "/work")
+
+    response = TestClient(app).post("/info", data={"url": MOVIE_URL})
+    assert response.status_code == 200
+    assert captured.get("output_dir") == "/downloads"
+    assert captured.get("work_dir") == "/work"
+    assert captured.get("output_dir") != "/app"
+    assert captured.get("work_dir") != "/app"
+
+
+def test_info_returns_200_when_mobile_scene_data_is_missing(monkeypatch):
+    movie = Movie(MOVIE_URL, session_for(mobile_name="mobile_no_scenes.html"))
+
+    class FakeDownloader:
+        def __init__(self, **kwargs):
+            self.kwargs = kwargs
+
+        def print_info(self):
+            self.manifest = SimpleNamespace(available_resolutions=[720], segment_duration=2.0)
+            movie.calculate_scenes_boundaries(2.0)
+            print(f"{movie.studio_name} - {movie.title}")
+            print(f"Duration: {movie.total_duration_seconds // 60} min ({movie.total_duration_seconds}s)")
+            print("Scenes: unavailable")
+
+    monkeypatch.setattr("aebn_dl.web.Downloader", FakeDownloader)
+    response = TestClient(app).post("/info", data={"url": MOVIE_URL})
+    assert response.status_code == 200
+    assert "Fixture Title" in response.text
+    assert "Fixture Studio" in response.text
 
 
 def test_subtitle_generation_is_skipped_without_remote_backend(monkeypatch, tmp_path):
